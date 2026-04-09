@@ -1,4 +1,4 @@
-# codesize 1.0.0 Beta 1 — 28 Mar 2026
+# codesize 1.0.0 - 9 Apr 2026
 
 First stable release.
 
