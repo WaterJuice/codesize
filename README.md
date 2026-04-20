@@ -1,7 +1,9 @@
 # codesize
 
 A simple CLI tool that scans directories for code files and displays statistics.
-Supports Python, Go, Rust, and Elixir.
+Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C.
+
+`.h` files are auto-detected as C or Objective-C based on their content.
 
 ## Features
 

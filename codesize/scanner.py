@@ -3,7 +3,9 @@
 #   ----------
 #
 #   Scans directories for code files and collects statistics.
-#   Supports Python, Go, Rust, and Elixir.
+#   Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C.
+#
+#   .h files are auto-detected as C or Objective-C based on content markers.
 #
 #   (c) 2026 WaterJuice — Unlicense; see LICENSE in the project root.
 #
@@ -38,12 +40,46 @@ class Language:
     docstring_markers: tuple[str, ...] = ()
 
 
-LANGUAGES: tuple[Language, ...] = (
-    Language("Python", (".py",), "#", docstring_markers=('"""', "'''")),
-    Language("Go", (".go",), "//", block_comment_start="/*", block_comment_end="*/"),
-    Language("Rust", (".rs",), "//", block_comment_start="/*", block_comment_end="*/"),
-    Language("Elixir", (".ex", ".exs"), "#", docstring_markers=('"""',)),
+PYTHON_LANG = Language("Python", (".py",), "#", docstring_markers=('"""', "'''"))
+GO_LANG = Language(
+    "Go", (".go",), "//", block_comment_start="/*", block_comment_end="*/"
 )
+RUST_LANG = Language(
+    "Rust", (".rs",), "//", block_comment_start="/*", block_comment_end="*/"
+)
+ELIXIR_LANG = Language("Elixir", (".ex", ".exs"), "#", docstring_markers=('"""',))
+JAVASCRIPT_LANG = Language(
+    "JavaScript",
+    (".js", ".mjs", ".cjs"),
+    "//",
+    block_comment_start="/*",
+    block_comment_end="*/",
+)
+# C and Objective-C share .h files — those are disambiguated by content (see scan_directory)
+C_LANG = Language("C", (".c",), "//", block_comment_start="/*", block_comment_end="*/")
+OBJC_LANG = Language(
+    "Objective-C",
+    (".m", ".mm"),
+    "//",
+    block_comment_start="/*",
+    block_comment_end="*/",
+)
+
+LANGUAGES: tuple[Language, ...] = (
+    PYTHON_LANG,
+    GO_LANG,
+    RUST_LANG,
+    ELIXIR_LANG,
+    JAVASCRIPT_LANG,
+    C_LANG,
+    OBJC_LANG,
+)
+
+# Tokens that strongly indicate Objective-C (used to disambiguate .h files)
+OBJC_MARKERS = ("@interface", "@protocol", "@class", "@property", "@end", "#import")
+# Objective-C markers appear near the top of a header (imports/declarations);
+# scanning only the prefix avoids O(file_size) substring work on large pure-C headers.
+OBJC_MARKER_SCAN_BYTES = 20_000
 
 # ----------------------------------------------------------------------------------------
 #   Data Classes
@@ -112,17 +148,22 @@ def count_lines(filepath: Path, lang: Language) -> tuple[int, int]:
     Returns:
         Tuple of (total_lines, code_lines).
     """
+    try:
+        content = filepath.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0, 0
+    return _count_lines_from_content(content, lang)
+
+
+# ----------------------------------------------------------------------------------------
+def _count_lines_from_content(content: str, lang: Language) -> tuple[int, int]:
+    """Count total and code lines from a content string (file already read)."""
     total_lines = 0
     code_lines = 0
     in_block_comment = False
     block_end: str | None = None
     in_docstring = False
     docstring_marker: str | None = None
-
-    try:
-        content = filepath.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return 0, 0
 
     for line in content.splitlines():
         total_lines += 1
@@ -175,6 +216,32 @@ def count_lines(filepath: Path, lang: Language) -> tuple[int, int]:
 
 
 # ----------------------------------------------------------------------------------------
+def _record_file(
+    filepath: Path,
+    lang: Language,
+    lang_stats: dict[str, LangStats],
+    content: str | None = None,
+) -> None:
+    """Record statistics for a single file into lang_stats."""
+    if lang.name not in lang_stats:
+        lang_stats[lang.name] = LangStats(name=lang.name)
+    stats = lang_stats[lang.name]
+    stats.num_files += 1
+
+    try:
+        stats.total_bytes += filepath.stat().st_size
+    except OSError:
+        pass
+
+    if content is not None:
+        lines, code = _count_lines_from_content(content, lang)
+    else:
+        lines, code = count_lines(filepath, lang)
+    stats.total_lines += lines
+    stats.code_lines += code
+
+
+# ----------------------------------------------------------------------------------------
 def scan_directory(directory: Path) -> CodeStats:
     """
     Scan a directory recursively for code files and collect statistics.
@@ -182,6 +249,14 @@ def scan_directory(directory: Path) -> CodeStats:
     Uses os.walk with hidden-directory pruning for fast traversal. Skips
     directories starting with a dot (e.g. .venv, .git). Only includes
     languages that have at least one file.
+
+    .h files are disambiguated as C or Objective-C using these signals
+    (in priority order):
+      1. Content tokens (e.g. @interface, #import) → Objective-C
+      2. Companion .m or .mm in same dir with same basename → Objective-C
+      3. Companion .c in same dir with same basename → C
+      4. Any .m/.mm in the scanned tree → Objective-C
+      5. Otherwise → C
 
     Args:
         directory: The directory to scan.
@@ -197,32 +272,56 @@ def scan_directory(directory: Path) -> CodeStats:
 
     # Walk once, pruning hidden dirs, collecting and processing files
     lang_stats: dict[str, LangStats] = {}
+    deferred_h_files: list[tuple[Path, str]] = []
+    # (dir, basename) -> language of the companion source file (C_LANG or OBJC_LANG)
+    companion_langs: dict[tuple[Path, str], Language] = {}
 
     for dirpath, dirnames, filenames in os.walk(directory):
         # Prune hidden directories in-place so os.walk doesn't descend into them
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
 
         for filename in filenames:
-            ext = os.path.splitext(filename)[1]
+            filepath = Path(dirpath, filename)
+            ext = filepath.suffix
+
+            if ext == ".h":
+                # Defer until we've seen all companions
+                try:
+                    content = filepath.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                deferred_h_files.append((filepath, content))
+                continue
+
             lang = extension_map.get(ext)
             if lang is None:
                 continue
 
-            filepath = Path(dirpath, filename)
+            if lang is OBJC_LANG:
+                # .m/.mm wins over .c if both somehow exist for same basename
+                companion_langs[(filepath.parent, filepath.stem)] = OBJC_LANG
+            elif lang is C_LANG:
+                companion_langs.setdefault((filepath.parent, filepath.stem), C_LANG)
 
-            if lang.name not in lang_stats:
-                lang_stats[lang.name] = LangStats(name=lang.name)
-            stats = lang_stats[lang.name]
-            stats.num_files += 1
+            _record_file(filepath, lang, lang_stats)
 
-            try:
-                stats.total_bytes += filepath.stat().st_size
-            except OSError:
-                pass
-
-            lines, code = count_lines(filepath, lang)
-            stats.total_lines += lines
-            stats.code_lines += code
+    # Now process .h files with full project knowledge
+    has_objc_impl = any(v is OBJC_LANG for v in companion_langs.values())
+    for filepath, content in deferred_h_files:
+        head = content[:OBJC_MARKER_SCAN_BYTES]
+        if any(marker in head for marker in OBJC_MARKERS):
+            lang = OBJC_LANG
+        else:
+            companion = companion_langs.get((filepath.parent, filepath.stem))
+            if companion is OBJC_LANG:
+                lang = OBJC_LANG
+            elif companion is C_LANG:
+                lang = C_LANG
+            elif has_objc_impl:
+                lang = OBJC_LANG
+            else:
+                lang = C_LANG
+        _record_file(filepath, lang, lang_stats, content=content)
 
     # Preserve language ordering from LANGUAGES
     languages: list[LangStats] = []

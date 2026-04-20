@@ -4,7 +4,14 @@ This file provides guidance for AI agents working on this project.
 
 ## Project Overview
 
-**codesize** is a CLI tool that recursively scans directories for code files (Python, Go, Rust, Elixir) and displays statistics including file count, total size, total lines, and code lines (excluding blanks, docstrings, and decorative comments). Shows per-language breakdown and totals. Supports ASCII box, plain text, and JSON output formats.
+**codesize** is a CLI tool that recursively scans directories for code files (Python, Go, Rust, Elixir, JavaScript, C, Objective-C) and displays statistics including file count, total size, total lines, and code lines (excluding blanks, docstrings, and decorative comments). Shows per-language breakdown and totals. Supports ASCII box, plain text, and JSON output formats.
+
+`.h` files are auto-detected as C or Objective-C in priority order:
+1. Content tokens (`@interface`, `@protocol`, `@class`, `@property`, `@end`, `#import`) → Objective-C
+2. Companion `.m` or `.mm` in same directory with same basename → Objective-C
+3. Companion `.c` in same directory with same basename → C
+4. Any `.m`/`.mm` present in the scanned tree → Objective-C
+5. Otherwise → C
 
 ## Language and Spelling
 

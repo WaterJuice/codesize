@@ -11,7 +11,10 @@
 #   Mar 2026 - Created
 # ----------------------------------------------------------------------------------------
 
-"""codesize: A CLI tool to analyse code statistics in a directory."""
+"""codesize: A CLI tool to analyse code statistics in a directory.
+
+Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C.
+"""
 
 from codesize.version import VERSION_STR
 
