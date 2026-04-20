@@ -2,7 +2,7 @@
 
 A CLI tool to analyse code statistics in a directory.
 
-Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C. `.h` files are auto-detected as C or Objective-C based on their content.
+Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C. `.h` files are auto-detected as C or Objective-C based on their content. `.gitignore` files are honoured by default.
 
 ## Features
 
@@ -33,6 +33,9 @@ codesize --plain
 
 # JSON output
 codesize --json
+
+# Ignore .gitignore files (scan everything)
+codesize --no-gitignore
 ```
 
 ## Output Formats

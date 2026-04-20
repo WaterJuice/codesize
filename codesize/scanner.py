@@ -19,9 +19,11 @@
 # ----------------------------------------------------------------------------------------
 
 import os
+import sys
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from codesize._vendor.pathspec import GitIgnoreSpec
 
 # ----------------------------------------------------------------------------------------
 #   Language Definitions
@@ -242,13 +244,54 @@ def _record_file(
 
 
 # ----------------------------------------------------------------------------------------
-def scan_directory(directory: Path) -> CodeStats:
+def _load_gitignore(gitignore_path: Path) -> GitIgnoreSpec | None:
+    """Load and compile a .gitignore file. Returns None on read failure."""
+    try:
+        lines = gitignore_path.read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines()
+    except OSError as e:
+        print(
+            f"codesize: warning: could not read {gitignore_path}: {e}",
+            file=sys.stderr,
+        )
+        return None
+    return GitIgnoreSpec.from_lines(lines)
+
+
+# ----------------------------------------------------------------------------------------
+def _is_ignored(
+    name: str,
+    specs: list[tuple[GitIgnoreSpec, str]],
+    *,
+    is_dir: bool,
+) -> bool:
+    """Return True if name (relative to its parent dir) is ignored by any spec.
+
+    *specs* is a list of (spec, rel_prefix) pairs, where rel_prefix is the
+    posix-style relative path from the spec's base directory to the current
+    directory (empty string if same, otherwise ends with "/"). Callers
+    precompute this once per directory to avoid repeating `relative_to` work
+    per file.
+    """
+    suffix = "/" if is_dir else ""
+    for spec, prefix in specs:
+        if spec.match_file(prefix + name + suffix):
+            return True
+    return False
+
+
+# ----------------------------------------------------------------------------------------
+def scan_directory(directory: Path, *, respect_gitignore: bool = True) -> CodeStats:
     """
     Scan a directory recursively for code files and collect statistics.
 
     Uses os.walk with hidden-directory pruning for fast traversal. Skips
     directories starting with a dot (e.g. .venv, .git). Only includes
     languages that have at least one file.
+
+    When respect_gitignore is True (default), .gitignore files found in
+    the tree are applied; ignored files and directories are skipped.
 
     .h files are disambiguated as C or Objective-C using these signals
     (in priority order):
@@ -260,6 +303,7 @@ def scan_directory(directory: Path) -> CodeStats:
 
     Args:
         directory: The directory to scan.
+        respect_gitignore: If True, honour .gitignore files found in the tree.
 
     Returns:
         CodeStats object containing per-language and total statistics.
@@ -275,12 +319,45 @@ def scan_directory(directory: Path) -> CodeStats:
     deferred_h_files: list[tuple[Path, str]] = []
     # (dir, basename) -> language of the companion source file (C_LANG or OBJC_LANG)
     companion_langs: dict[tuple[Path, str], Language] = {}
+    active_specs: list[tuple[Path, GitIgnoreSpec]] = []
 
     for dirpath, dirnames, filenames in os.walk(directory):
+        current = Path(dirpath)
+
+        current_specs: list[tuple[GitIgnoreSpec, str]] = []
+        if respect_gitignore:
+            # Drop specs whose base is no longer an ancestor (os.walk may have
+            # jumped to a sibling branch).
+            active_specs = [
+                (base, spec)
+                for base, spec in active_specs
+                if base == current or base in current.parents
+            ]
+            if ".gitignore" in filenames:
+                spec = _load_gitignore(current / ".gitignore")
+                if spec is not None:
+                    active_specs.append((current, spec))
+            # Precompute relative prefixes once per (dir, spec) so _is_ignored
+            # only has to concat basenames.
+            for base, spec in active_specs:
+                if base == current:
+                    current_specs.append((spec, ""))
+                else:
+                    current_specs.append(
+                        (spec, current.relative_to(base).as_posix() + "/")
+                    )
+
         # Prune hidden directories in-place so os.walk doesn't descend into them
-        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if not d.startswith(".") and not _is_ignored(d, current_specs, is_dir=True)
+        ]
 
         for filename in filenames:
+            if _is_ignored(filename, current_specs, is_dir=False):
+                continue
+
             filepath = Path(dirpath, filename)
             ext = filepath.suffix
 

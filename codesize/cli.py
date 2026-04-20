@@ -85,6 +85,11 @@ def parse_args(argv: list[str]) -> Namespace:
         version=LICENSE_TEXT,
         help="show license and exit",
     )
+    p.add_argument(
+        "--no-gitignore",
+        action="store_true",
+        help="Don't honour .gitignore files found in the tree",
+    )
 
     # Output format options (mutually exclusive)
     format_group = p.add_mutex_group()
@@ -160,6 +165,6 @@ def _main_inner(argv: list[str]) -> int:
     else:
         output_format = "box"
 
-    stats = scan_directory(directory)
+    stats = scan_directory(directory, respect_gitignore=not args.no_gitignore)
     display_stats(stats, directory, output_format)
     return 0

@@ -5,7 +5,8 @@ description = "A simple CLI tool to analyse code statistics in a directory"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
-license = "Unlicense"
+license = "Unlicense AND MPL-2.0"
+license-files = ["LICENSE", "NOTICE", "codesize/_vendor/pathspec/LICENSE"]
 authors = [
     { name = "WaterJuice" },
 ]
@@ -15,6 +16,7 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: The Unlicense (Unlicense)",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -51,6 +53,8 @@ profile = "waterjuice"
 
 [tool.ruff]
 target-version = "py312"
+# Vendored third-party code retains its own style; don't reformat or lint it.
+extend-exclude = ["codesize/_vendor"]
 
 [tool.ruff.lint]
 extend-select = ["F", "E", "W", "I", "Q", "B", "TC", "UP"]
@@ -64,6 +68,7 @@ force-single-line = true
 typeCheckingMode = "strict"
 reportUnusedImport = "error"
 pythonVersion = "3.12"
+exclude = ["codesize/_vendor", ".venv"]
 
 [dependency-groups]
 dev = [

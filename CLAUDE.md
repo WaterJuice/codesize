@@ -13,6 +13,8 @@ This file provides guidance for AI agents working on this project.
 4. Any `.m`/`.mm` present in the scanned tree → Objective-C
 5. Otherwise → C
 
+`.gitignore` files found in the scanned tree are honoured by default (disable with `--no-gitignore`). Gitignore parsing is provided by a vendored copy of [pathspec](https://github.com/cpburnz/python-pathspec) (MPL-2.0) under `codesize/_vendor/pathspec/`.
+
 ## Language and Spelling
 
 Use **Australian English** throughout:

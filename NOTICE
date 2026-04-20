@@ -1,0 +1,15 @@
+codesize
+========
+
+Copyright: public domain (Unlicense). See LICENSE.
+
+This distribution additionally includes the following third-party software:
+
+1. pathspec (Mozilla Public License 2.0)
+   - Vendored under codesize/_vendor/pathspec/
+   - Licence: codesize/_vendor/pathspec/LICENSE
+   - Upstream: https://github.com/cpburnz/python-pathspec
+   - Modifications: see codesize/_vendor/README.md
+
+The MPL 2.0 governs only the files under codesize/_vendor/pathspec/. All other
+files in this project are released into the public domain under the Unlicense.

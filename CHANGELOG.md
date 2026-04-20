@@ -1,3 +1,21 @@
+# codesize 1.2.0 - 20 Apr 2026
+
+Honours `.gitignore` files during directory scans.
+
+## Gitignore Support
+
+- `.gitignore` files found anywhere in the scanned tree are now honoured by default. Both files and directories matched by gitignore patterns are skipped — pruned directories aren't even descended into.
+- Subdirectory `.gitignore` files apply only to their own subtree (matching git's semantics).
+- Negation patterns (`!foo`), anchored patterns (`/foo`), directory-only patterns (`foo/`), and `**` globs all work.
+- Pass `--no-gitignore` to disable and scan everything.
+
+## Vendored Dependency
+
+Gitignore parsing is provided by a vendored copy of [pathspec 1.0.4](https://github.com/cpburnz/python-pathspec) (MPL-2.0), living under `codesize/_vendor/pathspec/`. This keeps the "zero runtime dependencies" guarantee and pins the exact bytes shipped to users — no supply-chain surprises from upstream changes.
+
+The project licence expression is now `Unlicense AND MPL-2.0`; see the top-level `NOTICE` file for details. All codesize-authored files remain Unlicensed (public domain).
+
+
 # codesize 1.1.0 - 20 Apr 2026
 
 Adds support for more languages and smarter header-file classification.

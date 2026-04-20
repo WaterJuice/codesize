@@ -5,6 +5,8 @@ Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C.
 
 `.h` files are auto-detected as C or Objective-C based on their content.
 
+Respects `.gitignore` files found in the tree by default (pass `--no-gitignore` to disable).
+
 ## Features
 
 - Recursively scans directories for supported code files
@@ -42,6 +44,9 @@ codesize --plain
 
 # JSON output
 codesize --json
+
+# Ignore .gitignore files (scan everything)
+codesize --no-gitignore
 ```
 
 ### Example Output
