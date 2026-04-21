@@ -15,6 +15,8 @@ This file provides guidance for AI agents working on this project.
 
 `.gitignore` files found in the scanned tree are honoured by default (disable with `--no-gitignore`). Gitignore parsing is provided by a vendored copy of [pathspec](https://github.com/cpburnz/python-pathspec) (MPL-2.0) under `codesize/_vendor/pathspec/`.
 
+Languages are sorted by code lines (biggest first) by default. `--sort {code,files,size,lines,name}` picks a different field; numeric fields sort descending, `name` sorts alphabetically.
+
 ## Language and Spelling
 
 Use **Australian English** throughout:

@@ -20,10 +20,21 @@
 
 import os
 import sys
+from collections.abc import Callable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from typing import Literal
+from typing import get_args
 from codesize._vendor.pathspec import GitIgnoreSpec
+
+# ----------------------------------------------------------------------------------------
+#   Types
+# ----------------------------------------------------------------------------------------
+
+SortKey = Literal["code", "files", "size", "lines", "name"]
+SORT_KEYS: tuple[str, ...] = get_args(SortKey)
 
 # ----------------------------------------------------------------------------------------
 #   Language Definitions
@@ -282,7 +293,12 @@ def _is_ignored(
 
 
 # ----------------------------------------------------------------------------------------
-def scan_directory(directory: Path, *, respect_gitignore: bool = True) -> CodeStats:
+def scan_directory(
+    directory: Path,
+    *,
+    respect_gitignore: bool = True,
+    sort_by: SortKey = "code",
+) -> CodeStats:
     """
     Scan a directory recursively for code files and collect statistics.
 
@@ -400,10 +416,18 @@ def scan_directory(directory: Path, *, respect_gitignore: bool = True) -> CodeSt
                 lang = C_LANG
         _record_file(filepath, lang, lang_stats, content=content)
 
-    # Preserve language ordering from LANGUAGES
-    languages: list[LangStats] = []
-    for lang in LANGUAGES:
-        if lang.name in lang_stats:
-            languages.append(lang_stats[lang.name])
+    return CodeStats(languages=_sort_languages(lang_stats.values(), sort_by))
 
-    return CodeStats(languages=languages)
+
+# ----------------------------------------------------------------------------------------
+def _sort_languages(stats: Iterable[LangStats], sort_by: SortKey) -> list[LangStats]:
+    """Sort a collection of LangStats. Numeric keys descend; name ascends."""
+    if sort_by == "name":
+        return sorted(stats, key=lambda s: s.name)
+    numeric_keys: dict[SortKey, Callable[[LangStats], int]] = {
+        "code": lambda s: s.code_lines,
+        "files": lambda s: s.num_files,
+        "size": lambda s: s.total_bytes,
+        "lines": lambda s: s.total_lines,
+    }
+    return sorted(stats, key=numeric_keys[sort_by], reverse=True)

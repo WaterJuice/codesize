@@ -47,7 +47,12 @@ codesize --json
 
 # Ignore .gitignore files (scan everything)
 codesize --no-gitignore
+
+# Sort languages by something other than code lines
+codesize --sort files   # or: size, lines, code (default), name
 ```
+
+Languages are listed biggest first by code-line count by default. Pass `--sort name` for alphabetical, or `--sort files|size|lines` for the other fields.
 
 ### Example Output
 

@@ -20,6 +20,7 @@ import sys
 import traceback
 from pathlib import Path
 from codesize.output import display_stats
+from codesize.scanner import SORT_KEYS
 from codesize.scanner import scan_directory
 from codesize.version import VERSION_STR
 from .argbuilder import ArgsParser
@@ -89,6 +90,15 @@ def parse_args(argv: list[str]) -> Namespace:
         "--no-gitignore",
         action="store_true",
         help="Don't honour .gitignore files found in the tree",
+    )
+    p.add_argument(
+        "--sort",
+        choices=SORT_KEYS,
+        default="code",
+        help=(
+            "Sort languages by this field (default: code). "
+            "Numeric fields sort biggest first; 'name' sorts alphabetically."
+        ),
     )
 
     # Output format options (mutually exclusive)
@@ -165,6 +175,10 @@ def _main_inner(argv: list[str]) -> int:
     else:
         output_format = "box"
 
-    stats = scan_directory(directory, respect_gitignore=not args.no_gitignore)
+    stats = scan_directory(
+        directory,
+        respect_gitignore=not args.no_gitignore,
+        sort_by=args.sort,
+    )
     display_stats(stats, directory, output_format)
     return 0

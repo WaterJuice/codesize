@@ -1,3 +1,16 @@
+# codesize 1.3.0 - 21 Apr 2026
+
+Languages are now sorted by size in the output, with a `--sort` flag to pick
+a different field.
+
+## Sorting
+
+- The languages list is sorted **biggest first by code lines** by default
+  (previously: definition order).
+- New `--sort {code,files,size,lines,name}` flag picks the sort field.
+  Numeric fields sort descending; `name` sorts alphabetically ascending.
+
+
 # codesize 1.2.0 - 20 Apr 2026
 
 Honours `.gitignore` files during directory scans.
