@@ -3,7 +3,7 @@
 #   ----------
 #
 #   Scans directories for code files and collects statistics.
-#   Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C.
+#   Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, C, and Objective-C.
 #
 #   .h files are auto-detected as C or Objective-C based on content markers.
 #
@@ -68,6 +68,13 @@ JAVASCRIPT_LANG = Language(
     block_comment_start="/*",
     block_comment_end="*/",
 )
+TYPESCRIPT_LANG = Language(
+    "TypeScript",
+    (".ts", ".tsx", ".mts", ".cts"),
+    "//",
+    block_comment_start="/*",
+    block_comment_end="*/",
+)
 # C and Objective-C share .h files — those are disambiguated by content (see scan_directory)
 C_LANG = Language("C", (".c",), "//", block_comment_start="/*", block_comment_end="*/")
 OBJC_LANG = Language(
@@ -84,6 +91,7 @@ LANGUAGES: tuple[Language, ...] = (
     RUST_LANG,
     ELIXIR_LANG,
     JAVASCRIPT_LANG,
+    TYPESCRIPT_LANG,
     C_LANG,
     OBJC_LANG,
 )
@@ -388,6 +396,12 @@ def scan_directory(
 
             lang = extension_map.get(ext)
             if lang is None:
+                continue
+
+            # Skip TypeScript declaration files — auto-generated, not hand-written code.
+            if lang is TYPESCRIPT_LANG and filename.endswith(
+                (".d.ts", ".d.cts", ".d.mts")
+            ):
                 continue
 
             if lang is OBJC_LANG:

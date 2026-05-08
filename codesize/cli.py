@@ -3,7 +3,7 @@
 #   ------
 #
 #   Command-line interface entry point for codesize. Supports Python, Go,
-#   Rust, Elixir, JavaScript, C, and Objective-C.
+#   Rust, Elixir, JavaScript, TypeScript, C, and Objective-C.
 #
 #   (c) 2026 WaterJuice — Unlicense; see LICENSE in the project root.
 #
@@ -70,7 +70,7 @@ def parse_args(argv: list[str]) -> Namespace:
             f"codesize: {VERSION_STR}\n"
             "(c) 2026 WaterJuice. Unlicense.\n\n"
             "Analyse code statistics in a directory.\n"
-            "Supports Python, Go, Rust, Elixir, JavaScript, C, and Objective-C."
+            "Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, C, and Objective-C."
         ),
         version=f"codesize: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )

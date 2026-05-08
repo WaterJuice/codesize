@@ -1,3 +1,14 @@
+# codesize 1.4.0 - 8 May 2026
+
+Adds TypeScript as a supported language.
+
+## New Language
+
+- TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`)
+
+`.d.ts` (and `.d.cts`, `.d.mts`) declaration files are skipped — they're auto-generated and don't represent hand-written code.
+
+
 # codesize 1.3.0 - 21 Apr 2026
 
 Languages are now sorted by size in the output, with a `--sort` flag to pick
