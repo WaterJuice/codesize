@@ -1,3 +1,7 @@
+# codesize 1.4.1 - 30 May 2026
+
+Moved to new GitHub location: https://github.com/WaterJuice/codesize
+
 # codesize 1.4.0 - 8 May 2026
 
 Adds TypeScript as a supported language.

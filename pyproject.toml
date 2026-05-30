@@ -12,7 +12,7 @@ authors = [
 ]
 keywords = ["python", "statistics", "cli", "code-analysis", "metrics"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: The Unlicense (Unlicense)",
@@ -23,7 +23,8 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/WaterJuice/codesize"
+Documentation = "https://docs.waterjuice.org/codesize/latest/"
+Source = "https://github.com/WaterJuice/codesize"
 
 [project.scripts]
 codesize = "codesize.cli:main"
@@ -46,7 +47,7 @@ artifacts = ["codesize/_version.py"]
 [tool.hatch.build.targets.wheel]
 packages = ["codesize"]
 
-[tool.cal-publish-python]
+[tool.wj-publish]
 profile = "waterjuice"
 
 [tool.uv]
@@ -74,6 +75,6 @@ exclude = ["codesize/_vendor", ".venv"]
 dev = [
     "ruff",
     "pyright[nodejs]",
-    "cal-mkdocs",
-    "cal-publish-python>=0.4.0",
+    "wj-mkdocs",
+    "wj-publish",
 ]
