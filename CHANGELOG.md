@@ -1,3 +1,15 @@
+# codesize 1.4.2 - 9 Jun 2026
+
+Restores the solid box border in the default output.
+
+## Fix
+
+- The horizontal box rule is once again a solid line (`─`, U+2500) instead of an
+  ASCII hyphen (`-`), which had rendered as a dashed border in 1.4.1. The
+  character was inadvertently mangled to a hyphen during an earlier history
+  rewrite; the other box-drawing glyphs were unaffected.
+
+
 # codesize 1.4.1 - 30 May 2026
 
 Moved to new GitHub location: https://github.com/WaterJuice/codesize
