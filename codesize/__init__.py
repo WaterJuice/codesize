@@ -13,7 +13,7 @@
 
 """codesize: A CLI tool to analyse code statistics in a directory.
 
-Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, C, and Objective-C.
+Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, Swift, C, and Objective-C.
 Honours .gitignore files by default.
 """
 

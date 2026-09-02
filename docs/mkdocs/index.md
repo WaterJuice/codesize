@@ -2,7 +2,7 @@
 
 A CLI tool to analyse code statistics in a directory.
 
-Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, C, and Objective-C. `.h` files are auto-detected as C or Objective-C based on their content. `.gitignore` files are honoured by default.
+Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, Swift, C, and Objective-C. `.h` files are auto-detected as C or Objective-C based on their content. `.gitignore` files are honoured by default.
 
 ## Features
 

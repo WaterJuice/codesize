@@ -3,7 +3,8 @@
 #   ----------
 #
 #   Scans directories for code files and collects statistics.
-#   Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, C, and Objective-C.
+#   Supports Python, Go, Rust, Elixir, JavaScript, TypeScript, Swift, C, and
+#   Objective-C.
 #
 #   .h files are auto-detected as C or Objective-C based on content markers.
 #
@@ -75,6 +76,9 @@ TYPESCRIPT_LANG = Language(
     block_comment_start="/*",
     block_comment_end="*/",
 )
+SWIFT_LANG = Language(
+    "Swift", (".swift",), "//", block_comment_start="/*", block_comment_end="*/"
+)
 # C and Objective-C share .h files — those are disambiguated by content (see scan_directory)
 C_LANG = Language("C", (".c",), "//", block_comment_start="/*", block_comment_end="*/")
 OBJC_LANG = Language(
@@ -92,6 +96,7 @@ LANGUAGES: tuple[Language, ...] = (
     ELIXIR_LANG,
     JAVASCRIPT_LANG,
     TYPESCRIPT_LANG,
+    SWIFT_LANG,
     C_LANG,
     OBJC_LANG,
 )
