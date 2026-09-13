@@ -1,3 +1,8 @@
+# codesize 1.5.1 - 13 Sep 2026
+
+Publishing instructions no longer refer to GitLab Pages; documentation is published to
+https://docs.waterjuice.org.
+
 # codesize 1.5.0 - 2 Sep 2026
 
 Adds Swift as a supported language.

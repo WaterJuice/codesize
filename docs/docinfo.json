@@ -1,4 +1,4 @@
 {
-    "name": "codesize",
+    "title": "codesize",
     "description": "A CLI tool to analyse code statistics in a directory"
 }

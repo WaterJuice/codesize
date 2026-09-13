@@ -87,13 +87,13 @@ make build
 
 ## Publishing
 
-Publishing requires `cal-publish-python` configuration.
+Publishing requires `wj-publish` configuration.
 
 ```bash
 # Build first
 make build
 
-# Publish wheel to PyPI and docs to GitLab Pages
+# Publish wheel to PyPI and docs to docs.waterjuice.org
 make publish
 ```
 
