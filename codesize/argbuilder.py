@@ -57,6 +57,8 @@ from argparse import Namespace
 from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Sequence
+from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 from typing import NoReturn
 from typing import TypeVar
@@ -79,6 +81,24 @@ type ParserLike = (
 type ArgsItem = ArgsArgument | ArgsGroup | ArgsCollection | ArgsMutexGroup
 
 type ArgsCompleteItem = ArgsItem | ArgsCommand | ArgsCommandGroup
+
+
+# ----------------------------------------------------------------------------------------
+@dataclass
+class _ArgvSplit:
+    """An argument list split around its command (see ArgsParser._split_argv)."""
+
+    # Top-level options met before the command, each with its values
+    top_level: list[str] = field(default_factory=lambda: list[str]())
+    # Every other token before the command (options for the command, and their values)
+    others: list[str] = field(default_factory=lambda: list[str]())
+    # The command, or None if there isn't one
+    command: str | None = None
+    # Everything after the command; with no command, the "--" and what follows it
+    rest: list[str] = field(default_factory=lambda: list[str]())
+    # The top-level actions whose options appear before the command
+    actions: list[Action] = field(default_factory=lambda: list[Action]())
+
 
 # ----------------------------------------------------------------------------------------
 #   Private Base Class (must be defined before public classes that inherit from it)
@@ -400,15 +420,17 @@ class ArgsParser(_BaseClass):
         new_command = ArgsCommand(
             name=name, items=items, help=help, description=description
         )
-        if self.__common_collection__ and not exclude_common:
-            if self._common_options_first:
-                # Insert at the beginning of items list
-                new_command._prepend_item(self.__common_collection__)
-            else:
-                # Store for later application at the end
-                new_command._common_collection = self.__common_collection__
+        new_command._exclude_common = exclude_common
+        self._attach_common(new_command)
         self.__all_items__.append(new_command)
         return new_command
+
+    # ------------------------------------------------------------------------------------
+    def _attach_common(self, command: "ArgsCommand") -> None:
+        """Give a command the common collection, unless it was added without it."""
+        if self.__common_collection__ and not command._exclude_common:
+            command._common_collection = self.__common_collection__
+            command._common_first = self._common_options_first
 
     # ------------------------------------------------------------------------------------
     def create_common_collection(
@@ -435,7 +457,8 @@ class ArgsParser(_BaseClass):
 
         Returns:
             The collection instance that will be appended to each command added
-            to this parser (unless excluded via `exclude_common=True`).
+            to this parser (unless excluded via `exclude_common=True`), whether
+            the command was added before this call or after it.
 
         Example:
             ```python
@@ -457,6 +480,11 @@ class ArgsParser(_BaseClass):
 
         self._common_options_first = options_first
         self.__common_collection__ = ArgsCollection(items=items)
+        # Commands added before now get it too (this includes grouped commands,
+        # which their groups also add to this parser).
+        for item in self.__all_items__:
+            if isinstance(item, ArgsCommand):
+                self._attach_common(item)
         return self.__common_collection__
 
     # ------------------------------------------------------------------------------------
@@ -507,30 +535,107 @@ class ArgsParser(_BaseClass):
         return names
 
     # ------------------------------------------------------------------------------------
-    def _reorder_args(self, argv: list[str]) -> list[str]:
-        """Move command to front of argument list if found.
+    @staticmethod
+    def _has_top_level_positionals(parser: argparse.ArgumentParser) -> bool:
+        """Whether the parser has positional arguments of its own (besides commands)."""
+        return any(
+            not action.option_strings
+            and not isinstance(action, argparse._SubParsersAction)
+            for action in parser._actions
+        )
 
-        Allows commands to appear anywhere in the argument list, not just
-        at the beginning. For example: `mytool --verbose run --force`
-        becomes `mytool run --verbose --force`.
+    # ------------------------------------------------------------------------------------
+    @staticmethod
+    def _looks_like_option(parser: argparse.ArgumentParser, arg: str) -> bool:
+        """Whether argparse would read arg as an option rather than a value."""
+        if not arg.startswith("-") or arg == "-":
+            return False
+        # Like argparse, "-1" is a value unless the parser has options that look
+        # like negative numbers.
+        return not (
+            parser._negative_number_matcher.match(arg)
+            and not parser._has_negative_number_optionals
+        )
+
+    # ------------------------------------------------------------------------------------
+    @staticmethod
+    def _top_level_option(
+        parser: argparse.ArgumentParser, arg: str
+    ) -> tuple[Action | None, bool]:
+        """Return the top-level action an argument names, if any.
+
+        Also returns whether the option's value is attached (`--env=prod`, `-eprod`).
         """
-        command_names = self._get_all_command_names()
-        if not command_names:
-            return argv
+        actions = parser._option_string_actions
+        if not ArgsParser._looks_like_option(parser, arg):
+            return None, False
+        if arg in actions:
+            return actions[arg], False
+        name = arg.split("=", 1)[0]
+        if name in actions:
+            return actions[name], True
+        if not arg.startswith("--") and arg[:2] in actions:
+            return actions[arg[:2]], True  # -eprod, or a bundle of flags such as -vq
+        if arg.startswith("--") and parser.allow_abbrev:
+            # argparse accepts any unambiguous prefix of a long option
+            matches = {a for s, a in actions.items() if s.startswith(name)}
+            if len(matches) == 1:
+                return matches.pop(), "=" in arg
+        return None, False
 
-        # Find the first argument that matches a command name
-        command_index = None
-        for i, arg in enumerate(argv):
-            if arg in command_names:
-                command_index = i
+    # ------------------------------------------------------------------------------------
+    def _split_argv(
+        self, parser: argparse.ArgumentParser, argv: list[str], command_names: set[str]
+    ) -> _ArgvSplit:
+        """Find the command in argv, keeping the top-level options apart.
+
+        Commands can appear anywhere in the argument list. The command is the first
+        argument that names one, other than the value of a top-level option (in
+        `mytool --env run status`, "run" is the value of --env and "status" the
+        command) and other than anything after "--", which is never a command.
+        """
+        split = _ArgvSplit()
+        i = 0
+        while i < len(argv):
+            arg = argv[i]
+            if arg == "--":
                 break
-
-        # If command found and not already at front, move it
-        if command_index is not None and command_index > 0:
-            command = argv[command_index]
-            return [command] + argv[:command_index] + argv[command_index + 1 :]
-
-        return argv
+            if arg in command_names:
+                split.command = arg
+                split.rest = argv[i + 1 :]
+                return split
+            action, attached = self._top_level_option(parser, arg)
+            i += 1
+            if action is None:
+                split.others.append(arg)
+                continue
+            split.top_level.append(arg)
+            split.actions.append(action)
+            if attached:
+                continue
+            # Take the option's values, as argparse would
+            nargs = action.nargs
+            if nargs == argparse.REMAINDER:
+                split.top_level += argv[i:]
+                return split
+            if nargs is None or isinstance(nargs, int):
+                wanted = 1 if nargs is None else nargs
+                while wanted > 0 and i < len(argv) and argv[i] != "--":
+                    split.top_level.append(argv[i])
+                    i += 1
+                    wanted -= 1
+            elif nargs in ("?", "*", "+"):
+                while (
+                    i < len(argv)
+                    and argv[i] != "--"
+                    and not self._looks_like_option(parser, argv[i])
+                ):
+                    split.top_level.append(argv[i])
+                    i += 1
+                    if nargs == "?":
+                        break
+        split.rest = argv[i:]
+        return split
 
     # ------------------------------------------------------------------------------------
     def _print_help_all(self, parser: argparse.ArgumentParser) -> None:
@@ -569,7 +674,9 @@ class ArgsParser(_BaseClass):
         are parsed.
 
         Commands can appear anywhere in the argument list - they will be
-        automatically moved to the front before parsing.
+        automatically moved in front of the command's options before parsing.
+        Top-level options stay before the command, an option's value is never
+        taken for a command, and nothing after "--" is a command.
 
         Args:
             argv: Optional list of argument strings to parse. If not provided,
@@ -629,39 +736,51 @@ class ArgsParser(_BaseClass):
 
         self.__add_to_parser__(parser)
 
-        # Handle --help-all before normal parsing
-        if "--help-all" in argv:
+        # Handle --help-all before normal parsing, unless the application defines
+        # an option of that name itself. Nothing after "--" is an option.
+        options = argv[: argv.index("--")] if "--" in argv else argv
+        if (
+            "--help-all" in options
+            and "--help-all" not in parser._option_string_actions
+        ):
             self._print_help_all(parser)
             sys.exit(0)
 
-        # Reorder arguments to allow command anywhere in the argument list
-        reordered_argv = self._reorder_args(argv)
-
-        # Handle missing command when commands exist
         command_names = self._get_all_command_names()
         if command_names:
-            # Check if a command was provided
-            has_command = any(arg in command_names for arg in reordered_argv)
-
-            if not has_command:
-                # Check if user is asking for help or version (let argparse handle these)
-                is_help = "--help" in reordered_argv or "-h" in reordered_argv
-                is_version = (
-                    "--version" in reordered_argv or "--license" in reordered_argv
-                )
-
-                if is_help or is_version:
-                    # User wants help or version - let argparse show them
-                    pass
-                elif self.default_command:
-                    # Inject default command at the front
-                    reordered_argv = [self.default_command] + reordered_argv
+            split = self._split_argv(parser, argv, command_names)
+            if split.command is not None:
+                # Put the command after the top-level options and before its own,
+                # which may have come first
+                argv = [*split.top_level, split.command, *split.others, *split.rest]
+            elif any(
+                isinstance(action, (argparse._HelpAction, argparse._VersionAction))
+                for action in split.actions
+            ):
+                # User wants help or a version-style message (such as --version)
+                # - let argparse show it
+                pass
+            elif self.default_command:
+                if split.rest and self._has_top_level_positionals(parser):
+                    # Everything after "--" is positional, and argparse gives the
+                    # top-level positionals their values before it gets to the
+                    # command, so the default command goes after them, where the
+                    # user would have typed it
+                    argv = [*argv, self.default_command]
                 else:
-                    # No command and no default: show help and exit
-                    parser.print_help()
-                    sys.exit(0)
+                    # Use the default command, in the place a command would go
+                    argv = [
+                        *split.top_level,
+                        self.default_command,
+                        *split.others,
+                        *split.rest,
+                    ]
+            else:
+                # No command and no default: show help and exit
+                parser.print_help()
+                sys.exit(0)
 
-        args = parser.parse_args(reordered_argv)
+        args = parser.parse_args(argv)
         self.__parser = parser
         return args
 
@@ -960,14 +1079,12 @@ class ArgsCommand(_BaseClass):
         self._command_name = name
         self._help = help or description
         self._description = description or help
+        # Common options from the parser, applied before or after the command's own
         self._common_collection: ArgsCollection | None = None
+        self._common_first = False
+        self._exclude_common = False
         if items:
             self.add(*items)
-
-    # ------------------------------------------------------------------------------------
-    def _prepend_item(self, item: ArgsItem) -> None:
-        """Add an item at the beginning of the items list."""
-        self.__all_items__.insert(0, item)
 
     # ------------------------------------------------------------------------------------
     def __add_to_sub_parser__(
@@ -983,11 +1100,13 @@ class ArgsCommand(_BaseClass):
         command_parser.add_argument(
             "--help", "-h", action="help", help=argparse.SUPPRESS
         )
+        common = self._common_collection
+        if common and self._common_first:
+            common.__add_to_parser__(command_parser)
         for item in self.__all_items__:
             item.__add_to_parser__(command_parser)
-        # Apply common options at the end if they were deferred
-        if self._common_collection:
-            self._common_collection.__add_to_parser__(command_parser)
+        if common and not self._common_first:
+            common.__add_to_parser__(command_parser)
 
 
 # ----------------------------------------------------------------------------------------
@@ -1105,16 +1224,11 @@ class ArgsCommandGroup:
         new_command = ArgsCommand(
             name=name, items=items, help=help, description=description
         )
+        new_command._exclude_common = exclude_common
         self.__commands.append(new_command)
         if self.__parent:
             self.__parent._add_item(new_command)
-            if self.__parent.__common_collection__ and not exclude_common:
-                if self.__parent._common_options_first:
-                    # Insert at the beginning of items list
-                    new_command._prepend_item(self.__parent.__common_collection__)
-                else:
-                    # Store for later application at the end
-                    new_command._common_collection = self.__parent.__common_collection__
+            self.__parent._attach_common(new_command)
         return new_command
 
     # ------------------------------------------------------------------------------------
@@ -1389,7 +1503,10 @@ class _GroupedCommandsHelpFormatter(_FixedHelpFormatter):
                 subparsers.pop(cmd_name, None)
 
         # Commands not assigned to any group go under generic "Commands:" heading
+        # (needed only to set them apart from groups listed above them)
         if subparsers:
+            if parts:
+                parts.append(f"\n{heading_style}Commands:{reset_style}\n")
             for name, help_text in subparsers.items():
                 coloured_name = (
                     f"{action_style}{name}{reset_style}" if has_colors else name

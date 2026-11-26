@@ -16,6 +16,7 @@
 #   Imports
 # ----------------------------------------------------------------------------------------
 
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -133,7 +134,17 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
 
     try:
-        return _main_inner(argv)
+        try:
+            return _main_inner(argv)
+        finally:
+            # Flush now, so a reader that has closed the pipe (`codesize | true`)
+            # shows up here rather than as an error when the interpreter exits.
+            # (stdout is None if the program was started with it closed.)
+            if sys.stdout is not None:
+                sys.stdout.flush()
+    except BrokenPipeError:
+        _discard_stdout()
+        return 1
     except KeyboardInterrupt:
         print()
         print("---- Manually Terminated ----")
@@ -152,6 +163,21 @@ def main(argv: list[str] | None = None) -> int:
         t += "\n"
         print(t, file=sys.stderr)
         return 1
+
+
+# ----------------------------------------------------------------------------------------
+def _discard_stdout() -> None:
+    """Point stdout at the null device once its pipe has broken.
+
+    Python flushes stdout again at exit, which would fail on the broken pipe and print
+    "Exception ignored ... BrokenPipeError". This is the fix the Python documentation
+    gives for SIGPIPE.
+    """
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+    except (OSError, ValueError):
+        pass
 
 
 # ----------------------------------------------------------------------------------------

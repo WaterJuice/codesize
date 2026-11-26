@@ -1,3 +1,66 @@
+# codesize 1.6.0 - 26 Nov 2026
+
+Code-line counts are more accurate, and scans no longer hang, crash or go quiet on unusual
+trees. Counts for the same code will differ from 1.5.x, mostly upwards for Python.
+
+## Line Counting
+
+Comment and docstring markers are now found anywhere on a line, not just at its start or
+end, and string literals are skipped over so a marker inside a string no longer counts.
+
+- A block comment opened after code (`x = 1; /* note`) no longer makes the lines inside
+  it count as code, and code after a comment closes (`/* note */ x = 1;`, `*/ y();`) now
+  counts.
+- Python: a string opened mid-line (`text = """first`) no longer makes its closing line
+  look like a new docstring that swallows the code after it, sometimes the rest of the
+  file. One-line `x = """abc"""` assignments, raw `r"""` docstrings, escaped quotes, and
+  markers inside comments or strings are all handled.
+- Python: only docstrings are excluded, as documented — a triple-quoted string that
+  starts a statement. Other multi-line strings (`SQL = """...`, `dedent("""...""")`) are
+  code, and every non-blank line in them counts.
+- Elixir: only `@moduledoc`, `@doc`, `@typedoc` and `@shortdoc` heredocs are excluded.
+  Other heredocs, `~H"""` templates included, count as code.
+- Comment markers inside strings, such as CSS comments in a JavaScript template literal or
+  a Go raw string, are string content and count as code.
+- String syntax is recognised per language: JavaScript/TypeScript regex and template
+  literals, Go raw strings, Rust raw strings, chars and lifetimes, and Swift multi-line
+  strings.
+- Total lines count newlines only, as `wc -l` does. Form feeds, vertical tabs and Unicode
+  line separators no longer add lines.
+
+## Scanning
+
+- A negation in a nested `.gitignore` (`!important.py`) now re-includes a file that an
+  outer `.gitignore` ignores: the deepest matching `.gitignore` decides, as in git.
+- An invalid `.gitignore` line (a lone `!`, say) is skipped with a warning instead of
+  aborting the scan with a traceback.
+- Only regular files are read. A FIFO, socket or symlink to a device (such as
+  `/dev/zero`) with a code extension is skipped; previously the scan hung on it.
+- A directory or file that can't be read is reported on stderr and left out of the
+  totals. Unreadable directories were skipped silently, and unreadable files were counted
+  as empty. Dangling symlinks are skipped.
+- Writing to a closed pipe (`codesize | true`) exits with status 1 and no message, instead
+  of status 120 with a `BrokenPipeError` message.
+
+## Performance
+
+Line counting does more work per line, so scans take about 10% longer on Python-heavy
+trees.
+
+## Internal
+
+Fixes to the bundled argument parser (`argbuilder.py`), none of which affect codesize's
+own command line:
+
+- An option's value equal to a command name is no longer taken for the command, and
+  nothing after `--` is a command.
+- Top-level options placed before a command are kept there, rather than moved after it.
+- Help and version requests are recognised from the parser's registered actions,
+  replacing a hard-coded `--license` check. `--help-all` is left alone when the
+  application defines its own.
+- A common collection created after commands were added now applies to those commands too.
+- Ungrouped commands get their own heading in `--help`.
+
 # codesize 1.5.1 - 13 Sep 2026
 
 Publishing instructions no longer refer to GitLab Pages; documentation is published to
